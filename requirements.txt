@@ -1,0 +1,10 @@
+mcp
+langgraph
+chromadb
+pydantic>=2
+faker
+aiosqlite
+pytest
+pytest-asyncio
+tenacity
+python-dotenv

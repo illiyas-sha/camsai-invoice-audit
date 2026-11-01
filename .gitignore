@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.db
+chroma_data/
+outbox/
+mock_data/inbox/*.json
+!mock_data/inbox/.gitkeep
+.env
+*.egg-info/
+.pytest_cache/
