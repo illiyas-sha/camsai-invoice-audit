@@ -27,7 +27,12 @@ class LedgerPort(Protocol):
 
 
 class SQLiteLedger:
-    """File-backed ledger: one row per compliant invoice written."""
+    """File-backed ledger: one row per compliant invoice written.
+
+    write() is idempotent on invoice_id - re-posting the same invoice (e.g. an
+    orchestrator retry after a transient notify failure) returns the existing
+    ledger_id instead of raising, so a retry can never double-post.
+    """
 
     def __init__(self, db_path: Path = DB_PATH) -> None:
         self.db_path = db_path
@@ -35,12 +40,18 @@ class SQLiteLedger:
     async def write(self, invoice_id: str, vendor_id: str, total_amount: float, trace_id: str) -> int:
         async with aiosqlite.connect(self.db_path) as conn:
             await conn.execute(SCHEMA)
-            cursor = await conn.execute(
-                "INSERT INTO ledger_entries (invoice_id, vendor_id, total_amount, trace_id) VALUES (?, ?, ?, ?)",
+            await conn.execute(
+                """
+                INSERT INTO ledger_entries (invoice_id, vendor_id, total_amount, trace_id)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(invoice_id) DO NOTHING
+                """,
                 (invoice_id, vendor_id, total_amount, trace_id),
             )
             await conn.commit()
-            return cursor.lastrowid
+            cursor = await conn.execute("SELECT id FROM ledger_entries WHERE invoice_id = ?", (invoice_id,))
+            row = await cursor.fetchone()
+            return row[0]
 
     async def get(self, invoice_id: str) -> dict | None:
         async with aiosqlite.connect(self.db_path) as conn:
