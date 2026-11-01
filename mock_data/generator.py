@@ -3,6 +3,14 @@
 Run via `python -m mock_data.generator`. All three scenarios share VENDOR_ID /
 CONTRACT_RATE_CEILING with mcp_server/vectorstore/seed_contracts.py so API2's
 Chroma lookup and these fixtures agree on the same historical contract.
+
+Assessment Instruction for generator:
+Required Structural Scenarios: Your generator must automatically output at least three distinct testing profiles to validate your Orchestrator’s conditional branching behavior:
+
+Scenario A (Fully Compliant): A standard invoice containing well-formed line items that sit perfectly within your historical vector contracts ($4,000 threshold) and total billings under $50,000. (Expected: Route to Ledger -> Complete).
+Scenario B (Anomalous Rate/Price Deviation): An invoice matching the schema below where a single line-item unit rate violates contract thresholds. (Expected: Trigger Agent 2 Flag -> Skip Ledger -> Route to Slack Escalation).
+Scenario C (Structural Engine Crash): A malformed payload containing negative numerical values, empty line item arrays, or corrupted strings. (Expected: Validate orchestrator's state recovery, graceful exception management, and immediate error reporting without hanging).
+
 """
 
 from __future__ import annotations
