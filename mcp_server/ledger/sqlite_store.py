@@ -7,7 +7,7 @@ from typing import Protocol
 
 import aiosqlite
 
-DB_PATH = Path(__file__).resolve().parent.parent.parent / "ledger.db"
+DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "ledger.db"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS ledger_entries (
@@ -36,6 +36,7 @@ class SQLiteLedger:
 
     def __init__(self, db_path: Path = DB_PATH) -> None:
         self.db_path = db_path
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
     async def write(self, invoice_id: str, vendor_id: str, total_amount: float, trace_id: str) -> int:
         async with aiosqlite.connect(self.db_path) as conn:

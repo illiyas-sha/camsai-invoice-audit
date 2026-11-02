@@ -6,12 +6,15 @@ import os
 
 from mcp_server.notifier.base import NotifierPort
 from mcp_server.notifier.console_notifier import ConsoleNotifier
+from mcp_server.notifier.smtp_notifier import SMTPNotifier
 
 
 def _get_notifier() -> NotifierPort:
     backend = os.getenv("NOTIFIER_BACKEND", "console")
     if backend == "console":
         return ConsoleNotifier()
+    if backend == "smtp":
+        return SMTPNotifier()
     raise ValueError(f"Unknown NOTIFIER_BACKEND: {backend!r}")
 
 

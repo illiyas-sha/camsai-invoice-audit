@@ -1,0 +1,45 @@
+services:
+  # Automated Startup Sequence: regenerates the 3 mock invoice scenarios
+  # (compliant / anomalous / malformed) fresh on every run, before anything
+  # else starts - the "instant test availability" requirement.
+  seed:
+    build: .
+    image: camsai-invoice-audit:latest
+    command: python -m mock_data.generator
+
+  # `docker compose up` runs this automatically once seed finishes: proves
+  # the whole pipeline (MCP server + all 3 agents + all 3 scenarios) works
+  # inside the container, not just on the host.
+  tests:
+    image: camsai-invoice-audit:latest
+    command: python -m pytest -v
+    environment:
+      - NOTIFIER_BACKEND=${NOTIFIER_BACKEND:-console}
+    volumes:
+      - ledger_data:/app/data
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+
+  # For an ad hoc single-scenario run or a live demo, not started by a plain
+  # `docker compose up`:
+  #   docker compose run --rm app python -m app.run --scenario b
+  app:
+    image: camsai-invoice-audit:latest
+    profiles: ["manual"]
+    environment:
+      - NOTIFIER_BACKEND=${NOTIFIER_BACKEND:-console}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - NOTIFICATION_EMAIL_TO=${NOTIFICATION_EMAIL_TO:-}
+    volumes:
+      - ledger_data:/app/data
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+
+volumes:
+  ledger_data:

@@ -1,0 +1,11 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.git/
+*.db
+chroma_data/
+outbox/
+mock_data/inbox/*.json
+.env

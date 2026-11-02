@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 venv/
 *.db
+data/
 chroma_data/
 outbox/
 mock_data/inbox/*.json
