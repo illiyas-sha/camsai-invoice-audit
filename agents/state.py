@@ -14,6 +14,11 @@ class InvoiceAuditState(TypedDict, total=False):
     invoice_id: str
     trace_id: str
 
+    # Set only for the live-extraction demo path (Claude extracts a real
+    # document instead of Agent 1 reading a mock fixture by invoice_id).
+    document_content: str
+    document_media_type: str
+
     raw_payload: dict[str, Any]
     invoice: dict[str, Any]
 

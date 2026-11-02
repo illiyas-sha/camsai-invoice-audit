@@ -1,0 +1,13 @@
+INVOICE
+
+Invoice Number: INV-LIVE-9001
+Vendor: Acme Industrial Supplies Inc.
+Invoice Date: 2026-03-14
+Currency: USD
+
+Line Items:
+1. Industrial sensors (batch) - Qty: 3 - Unit Price: $1,200.00 - Line Total: $3,600.00
+2. Maintenance service - Qty: 2 - Unit Price: $950.00 - Line Total: $1,900.00
+3. Replacement parts kit - Qty: 4 - Unit Price: $800.00 - Line Total: $3,200.00
+
+Total Amount Due: $8,700.00

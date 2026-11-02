@@ -28,6 +28,7 @@ MCP server process (mcp_server/server.py)
     API 3  policy_check       -> deterministic rule function
     API 4  ledger_write       -> SQLite (ledger.db)
     API 5  notify             -> console / SMTP notifier
+    (+)    extract_live_invoice -> Claude (additive, opt-in, see S6)
 ```
 
 The orchestrator is the single **MCP client**; the five "APIs" the
@@ -216,11 +217,23 @@ rewrite:
   query is vendor-level, not line-item-aware. Correct for this prototype's
   single threshold per vendor; would need to become item-aware the moment a
   vendor has category-specific rate clauses.
-- API 1 reads pre-structured JSON rather than a real document. A real
-  ingestion pipeline would front it with OCR (benchmarked against the
-  Voxel51 / Invoices-OCR datasets the assessment references) that produces
-  the same `Invoice` contract Agent 1 already validates against — the
-  extraction logic downstream would not need to change.
+- API 1's required path stays mocked (pre-structured JSON), as specified,
+  and that's what the automated test suite and `docker-compose tests`
+  service exercise - no network, no API key, fully repeatable. As an
+  **additive** capability, Agent 1 can instead call a Claude-backed
+  extraction tool (`mcp_server/extraction/`, forced tool-use rather than
+  free-text parsing) against a real document - plain text or an image -
+  producing the identical `Invoice` contract, so nothing downstream changes.
+  This is deliberately *not* OCR against the Voxel51/Invoices-OCR datasets
+  the assessment references; it's a vision-capable LLM doing the same job.
+  Two honest caveats: (1) it is never used by automated tests, by design,
+  since it needs `ANTHROPIC_API_KEY` and a real network call; (2) because
+  the vector store is seeded with exactly one vendor contract, a real
+  invoice from an unrelated vendor still gets checked against that one
+  contract's $4,000 ceiling rather than failing with "no contract found" -
+  Chroma's single-document collection always returns its only entry. The
+  demo documents in `sample_invoices/` reference the seeded vendor
+  deliberately so the compliance check is actually meaningful end to end.
 - Monetary values are `float`, not `Decimal`. Acceptable for a prototype;
   a production ledger must not use binary floating point for currency math.
 - No retry/backoff around MCP tool calls yet. A transient failure (a flaky

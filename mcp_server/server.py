@@ -15,6 +15,7 @@ from mcp_server.tools.api2_vector_knowledge import vector_knowledge
 from mcp_server.tools.api3_policy_check import policy_check
 from mcp_server.tools.api4_ledger_write import ledger_write
 from mcp_server.tools.api5_notify import notify
+from mcp_server.tools.live_extract_invoice import extract_live_invoice
 
 mcp = MCPServer("camsai-invoice-audit")
 
@@ -23,6 +24,7 @@ mcp.tool()(vector_knowledge)
 mcp.tool()(policy_check)
 mcp.tool()(ledger_write)
 mcp.tool()(notify)
+mcp.tool()(extract_live_invoice)  # additive 6th tool - real documents via Claude, not one of the required 5
 
 
 if __name__ == "__main__":

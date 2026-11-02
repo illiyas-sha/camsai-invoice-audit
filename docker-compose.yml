@@ -35,8 +35,11 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - SMTP_FROM=${SMTP_FROM:-}
       - NOTIFICATION_EMAIL_TO=${NOTIFICATION_EMAIL_TO:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-5-5}
     volumes:
       - ledger_data:/app/data
+      - ./sample_invoices:/app/live_invoices:ro
     depends_on:
       seed:
         condition: service_completed_successfully

@@ -64,7 +64,7 @@ def build_agent3_error_notify(client: MCPToolClient) -> Callable[[InvoiceAuditSt
     """Failure route: notify that this invoice could not be processed, without crashing the run."""
 
     async def agent3_error_notify(state: InvoiceAuditState) -> dict:
-        invoice_id = state.get("invoice_id", "unknown")
+        invoice_id = state.get("invoice_id") or (state.get("raw_payload") or {}).get("invoice_id") or "unknown"
         error = state.get("error", "unknown error")
         try:
             await client.call("notify", level="error", subject=f"Invoice {invoice_id} failed processing", body=error)

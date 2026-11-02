@@ -94,11 +94,53 @@ def build_scenario_c() -> dict:
     }
 
 
+def build_scenario_d() -> dict:
+    """Anomalous on the OTHER rule: every rate stays under the $4,000 ceiling,
+    but the total crosses the $50,000 billing cap - exercises policy_check's
+    total_billing_cap branch, which A/B/C never reach.
+    """
+    invoice = Invoice(
+        invoice_id="INV-D-0001",
+        vendor_id=VENDOR_ID,
+        vendor_name=VENDOR_NAME,
+        invoice_date=fake.date_this_year(),
+        currency="USD",
+        line_items=[
+            LineItem(description="Bulk sensor order", quantity=10, unit_rate=3900.0, line_total=39000.0),
+            LineItem(description="Annual maintenance contract", quantity=5, unit_rate=2900.0, line_total=14500.0),
+        ],
+        total_amount=39000.0 + 14500.0,
+    )
+    return invoice.model_dump(mode="json")
+
+
+def build_scenario_e() -> dict:
+    """Structurally malformed via negative numerical values (distinct from
+    Scenario C's empty-array/corrupted-string failure modes).
+
+    Built as a raw dict, bypassing the Invoice model, since this must also
+    fail Agent 1's extraction step.
+    """
+    return {
+        "invoice_id": "INV-E-0001",
+        "vendor_id": VENDOR_ID,
+        "vendor_name": VENDOR_NAME,
+        "invoice_date": str(fake.date_this_year()),
+        "currency": "USD",
+        "line_items": [
+            {"description": "Industrial sensors (batch)", "quantity": -3, "unit_rate": 1200.0, "line_total": -3600.0},
+        ],
+        "total_amount": -3600.0,
+    }
+
+
 def main() -> None:
     scenarios = {
         "A (compliant)": build_scenario_a(),
-        "B (anomalous)": build_scenario_b(),
-        "C (malformed)": build_scenario_c(),
+        "B (anomalous rate)": build_scenario_b(),
+        "C (malformed - empty items + corrupted string)": build_scenario_c(),
+        "D (anomalous total cap)": build_scenario_d(),
+        "E (malformed - negative values)": build_scenario_e(),
     }
     for label, payload in scenarios.items():
         path = _write(payload["invoice_id"], payload)

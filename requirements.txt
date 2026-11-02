@@ -1,6 +1,7 @@
 mcp
 langgraph
 chromadb
+anthropic
 pydantic>=2
 faker
 aiosqlite
