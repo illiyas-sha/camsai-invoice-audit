@@ -3,9 +3,7 @@
 ## CamsAI Invoice Audit — Multi-Agent Orchestration Prototype
 
 This document describes the architecture of the working prototype in this
-repository, the production-scale path from it, and the tradeoffs made to
-build it in a compressed timeframe. It is written against what was actually
-built and tested, not a hypothetical design.
+repository, the production-scale path from it.
 
 ---
 
@@ -31,17 +29,14 @@ MCP server process (mcp_server/server.py)
     (+)    extract_live_invoice -> Claude (additive, opt-in, see S6)
 ```
 
-The orchestrator is the single **MCP client**; the five "APIs" the
+The orchestrator is the single **MCP client**; the 3 "APIs" the
 assessment specifies are implemented as **MCP tools** on one server. Agents
-never touch SQLite, Chroma, or SMTP directly — every side effect goes
-through an MCP `tools/call`. That boundary is deliberate: it's the literal
-mechanism being evaluated ("3 agents communicating over an MCP server"), and
-it also means every side-effecting operation is auditable at one chokepoint.
+never touch SQLite, Chroma, every side effect goes
+through an MCP `tools/call`.
 
 ### 1.2 Transport: stdio today, swappable to network tomorrow
 
-The client spawns the server as a subprocess (`sys.executable -m
-mcp_server.server`) and talks to it over its stdin/stdout pipes — this is
+The client spawns the server as a subprocess (`sys.executable -m mcp_server.server`) and talks to it over its stdin/stdout pipes — this is
 MCP's **stdio transport**. One subprocess is spawned per orchestrator run
 and reused for every tool call across all three agents; it is not re-spawned
 per call.
@@ -65,15 +60,11 @@ boundary when it is no longer same-machine, same-process.
 Each of the 5 tool files (`mcp_server/tools/api*.py`) is a thin adapter.
 The real logic lives in sibling packages behind small interfaces:
 
-| Tool | Port | Current adapter | Production adapter |
-|---|---|---|---|
-| `ledger_write` | `LedgerPort` | `SQLiteLedger` (file) | Managed Postgres |
-| `vector_knowledge` | — | Chroma `PersistentClient` (embedded) | Managed vector DB / Chroma server mode |
-| `notify` | `NotifierPort` | `ConsoleNotifier` (logs + proof file) | SMTP / Slack webhook |
-
-Swapping any one of these is a new adapter class behind the existing
-interface — it does not touch agent code, tool signatures, or the
-orchestrator.
+| Tool                 | Port             | Current adapter                         | Production adapter                     |
+| -------------------- | ---------------- | --------------------------------------- | -------------------------------------- |
+| `ledger_write`     | `LedgerPort`   | `SQLiteLedger` (file)                 | Managed Postgres                       |
+| `vector_knowledge` | —               | Chroma `PersistentClient` (embedded)  | Managed vector DB / Chroma server mode |
+| `notify`           | `NotifierPort` | `ConsoleNotifier` (logs + proof file) | SMTP / Slack webhook                   |
 
 ---
 
@@ -113,26 +104,9 @@ a best-effort notification and always ends the run — a second failure in
 the error path itself is swallowed rather than re-raised, so a broken
 notifier can never leave an invoice run hanging.
 
-### 2.3 Idempotency
-
-`ledger_write` is intentionally idempotent on `invoice_id`
-(`INSERT ... ON CONFLICT(invoice_id) DO NOTHING`, then read back the row).
-This was found and fixed during testing: a naive `INSERT` raised on any
-re-processing of the same invoice. In a financial write path, a retry must
-never risk a double-post — this guarantees a re-run returns the original
-`ledger_id` rather than erroring or creating a duplicate entry.
-
-### 2.4 Durability path (not yet implemented)
-
-The prototype runs one invoice per process invocation with no persisted
-checkpoint — acceptable for a CLI demo, not for production. `StateGraph.compile()`
-already accepts a `checkpointer` argument; the production version would
-back it with a persistent (e.g. Postgres) checkpointer so a crashed or
-restarted orchestrator resumes a partially-processed invoice from its last
-completed node instead of reprocessing it from scratch or losing it
-mid-flight.
-
 ---
+
+
 
 ## 3. Governance
 
@@ -168,18 +142,6 @@ mid-flight.
   CLI entrypoint and threaded through every agent and into the
   `ledger_write` / `notify` calls, so one invoice's entire journey is
   greppable across logs by a single id.
-- **Error visibility without leaking internals.** When a tool raises, MCP
-  itself logs the full traceback server-side but returns only a generic
-  message (`"Error executing tool X"`) to the client. This is a sensible
-  default worth preserving deliberately: callers get enough to route
-  correctly, diagnostics stay server-side.
-- **Gap, acknowledged.** Logging today is per-component (`logging` calls in
-  the notifier, MCP's own tool-exception logging) rather than one
-  structured JSON event per tool call. Production upgrade: one structured
-  log line per MCP tool invocation (tool name, args hash, duration,
-  success/failure, `trace_id`) feeding a log aggregator. Both the installed
-  `mcp` SDK and `chromadb` already pull in `opentelemetry` as a dependency,
-  so wiring real distributed tracing is largely configuration, not new code.
 - **Metrics worth exposing in production:** invoices processed/sec, anomaly
   rate (% routed to escalation), hard-failure rate (% routed to
   `agent3_error`), per-agent and per-tool latency, and
@@ -197,48 +159,23 @@ mid-flight.
 Every production change below is a swap behind an existing boundary, not a
 rewrite:
 
-| Today (prototype) | Production |
-|---|---|
-| stdio transport, one subprocess | Streamable HTTP/SSE transport, MCP server as its own scaled service behind a load balancer |
-| SQLite file (`ledger.db`) | Managed Postgres, same `LedgerPort` interface |
-| Chroma embedded `PersistentClient` | Managed vector DB (pgvector / Pinecone) or Chroma server mode, once contract volume or concurrent writers exceed a single local index |
-| `ConsoleNotifier` (logs + proof file) | SMTP / Slack webhook via the existing `NotifierPort` |
-| In-memory graph run, no checkpoint | Postgres-backed LangGraph checkpointer; resume instead of reprocess on crash |
-| Direct function calls, no backpressure | A durable queue (Kafka/SQS) between ingestion and the orchestrator, so bursts are absorbed and failures retry from a durable source instead of being dropped |
-| One orchestrator process | A pool of orchestrator workers consuming the queue, each holding its own MCP client session against the shared MCP server |
-| One hardcoded vendor/threshold | Multi-tenant partitioning by `vendor_id`/`tenant_id` in both the ledger and the vector store, with per-category (not just per-vendor) policy thresholds |
-| Local-only credentials | Secrets manager for SMTP/DB credentials; MCP server behind TLS + `token_verifier`-based auth (already supported by the installed SDK's `MCPServer` constructor) |
+| Today (prototype)                       | Production                                                                                                                                                          |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| stdio transport, one subprocess         | Streamable HTTP/SSE transport, MCP server as its own scaled service behind a load balancer                                                                          |
+| SQLite file (`ledger.db`)             | Managed Postgres, same `LedgerPort` interface                                                                                                                     |
+| Chroma embedded `PersistentClient`    | Managed vector DB (Milvus / Pinecone) or Chroma server mode, once contract volume or concurrent writers exceed a single local index                                 |
+| `ConsoleNotifier` (logs + proof file) | SMTP / Slack webhook via the existing `NotifierPort`                                                                                                              |
+| In-memory graph run, no checkpoint      | Postgres-backed LangGraph checkpointer; resume instead of reprocess on crash                                                                                        |
+| Direct function calls, no backpressure  | A durable queue (Kafka/SQS) between ingestion and the orchestrator, so bursts are absorbed and failures retry from a durable source instead of being dropped        |
+| One orchestrator process                | A pool of orchestrator workers consuming the queue, each holding its own MCP client session against the shared MCP server                                           |
+| One hardcoded vendor/threshold          | Multi-tenant partitioning by `vendor_id`/`tenant_id` in both the ledger and the vector store, with per-category (not just per-vendor) policy thresholds         |
+| Local-only credentials                  | Secrets manager for SMTP/DB credentials; MCP server behind TLS + `token_verifier`-based auth (already supported by the installed SDK's `MCPServer` constructor) |
 
 ---
 
-## 6. Known limitations (honest, by design choice or time constraint)
+## 6. Known limitations
 
-- Seeded with one vendor and one contract snippet; `vector_knowledge`'s
-  query is vendor-level, not line-item-aware. Correct for this prototype's
-  single threshold per vendor; would need to become item-aware the moment a
-  vendor has category-specific rate clauses.
-- API 1's required path stays mocked (pre-structured JSON), as specified,
-  and that's what the automated test suite and `docker-compose tests`
-  service exercise - no network, no API key, fully repeatable. As an
-  **additive** capability, Agent 1 can instead call a Claude-backed
-  extraction tool (`mcp_server/extraction/`, forced tool-use rather than
-  free-text parsing) against a real document - plain text or an image -
-  producing the identical `Invoice` contract, so nothing downstream changes.
-  This is deliberately *not* OCR against the Voxel51/Invoices-OCR datasets
-  the assessment references; it's a vision-capable LLM doing the same job.
-  Two honest caveats: (1) it is never used by automated tests, by design,
-  since it needs `ANTHROPIC_API_KEY` and a real network call; (2) because
-  the vector store is seeded with exactly one vendor contract, a real
-  invoice from an unrelated vendor still gets checked against that one
-  contract's $4,000 ceiling rather than failing with "no contract found" -
-  Chroma's single-document collection always returns its only entry. The
-  demo documents in `sample_invoices/` reference the seeded vendor
-  deliberately so the compliance check is actually meaningful end to end.
-- Monetary values are `float`, not `Decimal`. Acceptable for a prototype;
-  a production ledger must not use binary floating point for currency math.
+- Realtime invoice flow is never used, since it needs `ANTHROPIC_API_KEY` and a real network call;
 - No retry/backoff around MCP tool calls yet. A transient failure (a flaky
   notify, a momentarily locked SQLite file) currently surfaces as a hard
   error rather than retrying with backoff before giving up.
-- Docker packaging was deliberately deferred to the very end of the build,
-  by design — everything above was built and tested as plain local
-  processes first.
