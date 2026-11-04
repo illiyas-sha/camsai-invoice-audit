@@ -14,8 +14,12 @@ import mimetypes
 import uuid
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from agents.mcp_client import MCPToolClient
 from orchestrator.graph import build_graph
+
+load_dotenv()  # reads .env into os.environ for NOTIFIER_BACKEND/SMTP_*/ANTHROPIC_API_KEY
 
 SCENARIO_TO_INVOICE_ID = {
     "a": "INV-A-0001",

@@ -29,7 +29,7 @@ def build_agent3_post_and_notify(client: MCPToolClient) -> Callable[[InvoiceAudi
                 "notify",
                 level="success",
                 subject=f"Invoice {invoice['invoice_id']} posted to ledger",
-                body=f"Vendor {invoice['vendor_name']} invoice for {invoice['total_amount']} was compliant and posted.",
+                body=f"Vendor: {invoice['vendor_name']} \n invoice for {invoice['total_amount']} was compliant and posted.",
             )
         except MCPToolError as exc:
             return {"error": f"Agent 3 ledger/notify failed: {exc.message}"}
@@ -50,7 +50,7 @@ def build_agent3_escalate(client: MCPToolClient) -> Callable[[InvoiceAuditState]
                 "notify",
                 level="escalation",
                 subject=f"Invoice {invoice['invoice_id']} flagged for review",
-                body=f"Vendor {invoice['vendor_name']} invoice breached policy: {reasons}",
+                body=f"Vendor: {invoice['vendor_name']} \n\n invoice breached policy: {reasons}",
             )
         except MCPToolError as exc:
             return {"error": f"Agent 3 escalation notify failed: {exc.message}"}

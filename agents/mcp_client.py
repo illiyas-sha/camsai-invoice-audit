@@ -8,6 +8,7 @@ every tool call, and torn down when the run finishes.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from contextlib import AsyncExitStack
 from pathlib import Path
@@ -40,6 +41,11 @@ class MCPToolClient:
             command=sys.executable,
             args=["-m", "mcp_server.server"],
             cwd=str(PROJECT_ROOT),
+            # The SDK only forwards a security-curated env allowlist (PATH,
+            # APPDATA, ...) to the spawned server by default - NOTIFIER_BACKEND,
+            # SMTP_*, and ANTHROPIC_API_KEY would silently never reach it.
+            # Pass the full parent environment through explicitly instead.
+            env=os.environ.copy(),
         )
         read, write = await self._stack.enter_async_context(stdio_client(params))
         self._session = await self._stack.enter_async_context(ClientSession(read, write))
