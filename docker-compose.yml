@@ -14,7 +14,10 @@ services:
     image: camsai-invoice-audit:latest
     command: python -m pytest -v
     environment:
-      - NOTIFIER_BACKEND=${NOTIFIER_BACKEND:-console}
+      # Hardcoded, not read from .env: the automated suite must stay on the
+      # console notifier regardless of whatever backend the user has set up
+      # for their own manual demo - it must never depend on real credentials.
+      - NOTIFIER_BACKEND=console
     volumes:
       - ledger_data:/app/data
     depends_on:
